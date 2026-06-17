@@ -1,5 +1,6 @@
 import httpx
 import json
+from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
@@ -13,6 +14,8 @@ from textual.widgets import (
     LoadingIndicator,
     Select,
     Label,
+    ListView,
+    ListItem,
 )
 
 
@@ -49,7 +52,26 @@ class APISandbox(App):
         text-style: bold;
     }
 
+    #workspace {
+        height: 1fr;
+    }
+
+    #sidebar {
+        width: 36;
+        background: $surface-darken-1;
+        border-right: solid $panel;
+        padding: 1;
+    }
+
+    #sidebar-title {
+        text-style: bold;
+        margin-bottom: 1;
+        content-align: center middle;
+        color: $accent;
+    }
+
     #main-container {
+        width: 1fr;
         padding: 1 2;
     }
 
@@ -80,9 +102,16 @@ class APISandbox(App):
         background: $surface;
     }
 
-    TextArea {
+    TextArea, #history-list {
         border: solid $panel;
         height: 1fr;
+    }
+
+    /* Espaçamento vertical entre os blocos de histórico */
+    #history-list ListItem {
+        margin-bottom: 1;
+        padding: 0 1;
+        height: auto;
     }
     
     .error-text {
@@ -92,7 +121,12 @@ class APISandbox(App):
     }
     """
 
-    BINDINGS = [("q", "quit", "Sair")]
+    BINDINGS = [("q", "quit", "Sair"), ("h", "toggle_sidebar", "Histórico")]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.request_history = []
+        self._active_notification = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -102,6 +136,7 @@ class APISandbox(App):
             ("POST", "POST"),
             ("PUT", "PUT"),
             ("DELETE", "DELETE"),
+            ("PATCH", "PATCH"),
         ]
 
         yield Horizontal(
@@ -120,28 +155,33 @@ class APISandbox(App):
             id="request-bar",
         )
 
-        with Vertical(id="main-container"):
-            yield Label("", id="status-display")
+        with Horizontal(id="workspace"):
+            with Vertical(id="sidebar"):
+                yield Label("HISTÓRICO", id="sidebar-title")
+                yield ListView(id="history-list")
 
-            with TabbedContent(id="response-tabs"):
-                # MUDANÇA AQUI: "Resposta" agora é a primeira (Default)
-                with TabPane("Resposta", id="tab-response"):
-                    yield TextArea(
-                        "// Os resultados da API aparecerão aqui...",
-                        language="json",
-                        read_only=True,
-                    )
-                # "Corpo" passou para a segunda posição
-                with TabPane("Corpo (Request Body)", id="tab-request-body"):
-                    yield TextArea(
-                        '{\n    "title": "foo",\n    "body": "bar",\n    "userId": 1\n}',
-                        language="json",
-                        read_only=False,
-                    )
-                with TabPane("Headers", id="tab-headers"):
-                    yield TextArea(
-                        "// Aguardando requisição...", language="json", read_only=True
-                    )
+            with Vertical(id="main-container"):
+                yield Label("", id="status-display")
+
+                with TabbedContent(id="response-tabs"):
+                    with TabPane("Resposta", id="tab-response"):
+                        yield TextArea(
+                            "Os resultados da API aparecerão aqui...",
+                            language="json",
+                            read_only=True,
+                        )
+                    with TabPane("Request Body", id="tab-request-body"):
+                        yield TextArea(
+                            '{\n    "title": "foo",\n    "body": "bar",\n    "userId": 1\n}',
+                            language="json",
+                            read_only=False,
+                        )
+                    with TabPane("Headers", id="tab-headers"):
+                        yield TextArea(
+                            "Aguardando requisição...",
+                            language="json",
+                            read_only=True,
+                        )
 
         yield Footer(show_command_palette=False)
 
@@ -150,6 +190,34 @@ class APISandbox(App):
             pass
         except Exception:
             pass
+
+    def action_toggle_sidebar(self) -> None:
+        sidebar = self.query_one("#sidebar")
+        sidebar.display = not sidebar.display
+
+    @on(ListView.Selected, "#history-list")
+    def handle_history_selection(self, event: ListView.Selected) -> None:
+        index = event.index
+        if index is not None and 0 <= index < len(self.request_history):
+            saved_data = self.request_history[index]
+            self.query_one("#url-input", Input).value = saved_data["url"]
+            self.query_one("#method-select", Select).value = saved_data["method"]
+            self.query_one("#tab-request-body", TabPane).query_one(
+                TextArea
+            ).text = saved_data["body"]
+
+            if self._active_notification:
+                try:
+                    self._active_notification.dismiss()
+                except Exception:
+                    pass
+
+            self._active_notification = self.notify(
+                "Requisição restaurada!",
+                title="Histórico",
+                severity="information",
+                timeout=1.5,
+            )
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
@@ -164,6 +232,7 @@ class APISandbox(App):
             status_display = self.query_one("#status-display", Label)
             response_pane = self.query_one("#tab-response", TabPane)
             headers_pane = self.query_one("#tab-headers", TabPane)
+            history_list = self.query_one("#history-list", ListView)
             button = event.button
 
             button.disabled = True
@@ -183,7 +252,7 @@ class APISandbox(App):
             raw_body = request_body_area.text
 
             payload_data = None
-            if method in ("POST", "PUT") and raw_body.strip():
+            if method in ("POST", "PUT", "PATCH") and raw_body.strip():
                 try:
                     payload_data = json.loads(raw_body)
                 except json.JSONDecodeError:
@@ -192,6 +261,17 @@ class APISandbox(App):
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.request(method, url, json=payload_data)
+
+                    self.request_history.append(
+                        {"method": method, "url": url, "body": raw_body}
+                    )
+                    
+                    display_url = url
+                    if len(display_url) > 30:
+                        display_url = display_url[:27] + "..."
+                    
+                    entry_text = f"{method} [{response.status_code}]\n{display_url}"
+                    await history_list.append(ListItem(Label(entry_text)))
 
                     response_pane.query(LoadingIndicator).remove()
                     headers_pane.query(LoadingIndicator).remove()
@@ -211,14 +291,13 @@ class APISandbox(App):
                     display_text = ""
                     syntax_language = "json"
 
-                    # IMAGE
                     if "image/" in content_type:
                         size_kb = len(response.content) / 1024
                         display_text = (
-                            f"// [TIPO]: Imagem Detectada\n"
-                            f"// [CONTENT-TYPE]: {content_type}\n"
-                            f"// [TAMANHO]: {size_kb:.2f} KB\n\n"
-                            f"Nota: Interfaces de terminal (TUI) não exibem arquivos binários diretamente."
+                            f"TIPO: Imagem Detectada\n"
+                            f"CONTENT-TYPE: {content_type}\n"
+                            f"TAMANHO: {size_kb:.2f} KB\n\n"
+                            f"Nota: Interfaces de terminal não exibem arquivos binários diretamente."
                         )
                         syntax_language = "json"
 
@@ -226,7 +305,6 @@ class APISandbox(App):
                         display_text = f"\n{response.text}"
                         syntax_language = "html"
 
-                    # JSON
                     else:
                         try:
                             parsed_json = response.json()
