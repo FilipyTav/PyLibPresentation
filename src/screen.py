@@ -63,7 +63,6 @@ class APISandbox(App):
         display: none;
     }
 
-    /* Classes CSS para aplicar os tokens de cores com segurança */
     #status-display.success-status {
         color: $success;
     }
@@ -125,17 +124,19 @@ class APISandbox(App):
             yield Label("", id="status-display")
 
             with TabbedContent(id="response-tabs"):
-                with TabPane("Corpo (Request Body)", id="tab-request-body"):
-                    yield TextArea(
-                        '{\n    "title": "foo",\n    "body": "bar",\n    "userId": 1\n}',
-                        language="json",
-                        read_only=False,
-                    )
+                # MUDANÇA AQUI: "Resposta" agora é a primeira (Default)
                 with TabPane("Resposta", id="tab-response"):
                     yield TextArea(
                         "// Os resultados da API aparecerão aqui...",
                         language="json",
                         read_only=True,
+                    )
+                # "Corpo" passou para a segunda posição
+                with TabPane("Corpo (Request Body)", id="tab-request-body"):
+                    yield TextArea(
+                        '{\n    "title": "foo",\n    "body": "bar",\n    "userId": 1\n}',
+                        language="json",
+                        read_only=False,
                     )
                 with TabPane("Headers", id="tab-headers"):
                     yield TextArea(
