@@ -12,6 +12,7 @@ from textual.widgets import (
     TabPane,
     TextArea,
     LoadingIndicator,
+    Select,
 )
 
 
@@ -26,6 +27,12 @@ class APISandbox(App):
         padding: 1 2;
         background: $surface;
         border-bottom: solid $panel;
+    }
+    
+    /* Estilização para o seletor de métodos */
+    #method-select {
+        width: 16;
+        margin-right: 1;
     }
     
     #url-input {
@@ -73,7 +80,20 @@ class APISandbox(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
+        http_methods = [
+            ("GET", "GET"),
+            ("POST", "POST"),
+            ("PUT", "PUT"),
+            ("DELETE", "DELETE"),
+        ]
+
         yield Horizontal(
+            Select(
+                options=http_methods,
+                value="GET",
+                allow_blank=False,
+                id="method-select",
+            ),
             Input(
                 value="https://jsonplaceholder.typicode.com/posts/1",
                 id="url-input",
@@ -98,15 +118,23 @@ class APISandbox(App):
 
         yield Footer(show_command_palette=False)
 
-        def on_mount(self) -> None:
-            try:
-                pass
-            except Exception:
-                pass
+    def on_mount(self) -> None:
+        try:
+            pass
+        except Exception:
+            pass
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
             url = self.query_one("#url-input", Input).value
+
+            select_value = self.query_one("#method-select", Select).value
+
+            if select_value is None or select_value == Select.BLANK:
+                method = "GET"
+            else:
+                method = str(select_value)
+
             response_pane = self.query_one("#tab-response", TabPane)
             headers_pane = self.query_one("#tab-headers", TabPane)
             button = event.button
@@ -120,7 +148,7 @@ class APISandbox(App):
 
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.get(url)
+                    response = await client.request(method, url)
 
                     response_pane.query(LoadingIndicator).remove()
                     headers_pane.query(LoadingIndicator).remove()
