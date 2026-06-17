@@ -96,7 +96,13 @@ class APISandbox(App):
                         "// Aguardando requisição...", language="json", read_only=True
                     )
 
-        yield Footer()
+        yield Footer(show_command_palette=False)
+
+        def on_mount(self) -> None:
+            try:
+                pass
+            except Exception:
+                pass
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
