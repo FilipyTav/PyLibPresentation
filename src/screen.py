@@ -1,4 +1,3 @@
-import sys
 import httpx
 import json
 from textual.app import App, ComposeResult
@@ -29,7 +28,6 @@ class APISandbox(App):
         border-bottom: solid $panel;
     }
     
-    /* Estilização para o seletor de métodos */
     #method-select {
         width: 16;
         margin-right: 1;
@@ -105,7 +103,8 @@ class APISandbox(App):
 
         with Vertical(id="main-container"):
             with TabbedContent(id="response-tabs"):
-                with TabPane("JSON Resposta", id="tab-response"):
+                # Mantemos os títulos fixos para uma UI consistente e livre de bugs de tipo
+                with TabPane("Resposta", id="tab-response"):
                     yield TextArea(
                         "// Os resultados da API aparecerão aqui...",
                         language="json",
@@ -127,7 +126,6 @@ class APISandbox(App):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
             url = self.query_one("#url-input", Input).value
-
             select_value = self.query_one("#method-select", Select).value
 
             if select_value is None or select_value == Select.BLANK:
@@ -153,13 +151,39 @@ class APISandbox(App):
                     response_pane.query(LoadingIndicator).remove()
                     headers_pane.query(LoadingIndicator).remove()
 
-                    try:
-                        pretty_json = json.dumps(response.json(), indent=4)
-                    except json.JSONDecodeError:
-                        pretty_json = response.text
+                    content_type = response.headers.get("content-type", "").lower()
+
+                    display_text = ""
+                    syntax_language = "json"
+
+                    # IMAGE
+                    if "image/" in content_type:
+                        size_kb = len(response.content) / 1024
+                        display_text = (
+                            f"// [TIPO]: Imagem Detectada n"
+                            f"// [CONTENT-TYPE]: {content_type}\n"
+                            f"// [TAMANHO]: {size_kb:.2f} KB\n\n"
+                            f"Nota: Interfaces de terminal (TUI) não exibem arquivos binários diretamente.\n"
+                            f"Sua requisição obteve sucesso com Status Code: {response.status_code}."
+                        )
+                        syntax_language = "json"
+
+                    elif "text/html" in content_type:
+                        display_text = f"\n{response.text}"
+                        syntax_language = "html"
+
+                    # JSON
+                    else:
+                        try:
+                            parsed_json = response.json()
+                            display_text = json.dumps(parsed_json, indent=4)
+                            syntax_language = "json"
+                        except json.JSONDecodeError:
+                            display_text = response.text
+                            syntax_language = "json"
 
                     await response_pane.mount(
-                        TextArea(pretty_json, language="json", read_only=True)
+                        TextArea(display_text, language=syntax_language, read_only=True)
                     )
 
                     pretty_headers = json.dumps(dict(response.headers), indent=4)
