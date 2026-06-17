@@ -21,103 +21,149 @@ from textual.widgets import (
 
 class APISandbox(App):
     CSS = """
+    Screen {
+        background: #0f172a; /* Deep slate background */
+    }
+
+    Header {
+        background: rgba(255, 255, 255, 0.05);
+        color: #e2e8f0;
+    }
+
     HeaderIcon {
         display: none;
     }
 
     #request-bar {
         height: auto;
-        padding: 1 2;
-        background: $surface;
-        border-bottom: solid $panel;
+        padding: 0 1;
+        margin: 0 1 1 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: round rgba(255, 255, 255, 0.15);
     }
     
     #method-select {
         width: 16;
         margin-right: 1;
+        background: rgba(0, 0, 0, 0.3);
+        border: blank;
     }
     
     #url-input {
         width: 1fr;
-        border: tall $primary;
         margin-right: 1;
+        background: rgba(0, 0, 0, 0.3);
+        border: round rgba(255, 255, 255, 0.2);
     }
     
     #url-input:focus {
-        border: tall $accent;
+        border: round #06b6d4;
     }
     
     #run-btn {
         width: 16;
         text-style: bold;
+        background: #0ea5e9;
+        color: white;
+        border: blank;
+    }
+
+    #run-btn:hover {
+        background: #38bdf8;
     }
 
     #workspace {
         height: 1fr;
+        margin: 0 1 0 1;
     }
 
+    /* Sidebar Glass Panel */
     #sidebar {
         width: 36;
-        background: $surface-darken-1;
-        border-right: solid $panel;
-        padding: 1;
+        background: rgba(255, 255, 255, 0.03);
+        border: round rgba(255, 255, 255, 0.1);
+        padding: 0 1;
+        margin-right: 1;
     }
 
     #sidebar-title {
         text-style: bold;
-        margin-bottom: 1;
+        margin-bottom: 0;
         content-align: center middle;
-        color: $accent;
+        color: #06b6d4;
     }
 
     #main-container {
         width: 1fr;
-        padding: 1 2;
     }
 
     #status-display {
-        background: $panel;
-        padding: 0 2;
-        margin-top: 1;
-        height: 1;
+        background: rgba(0, 0, 0, 0.3);
+        border: round rgba(255, 255, 255, 0.1);
+        padding: 0 1;
+        margin-bottom: 0;
+        height: auto; /* Shrink to fit text + border */
         text-style: bold;
         content-align: center middle;
         display: none;
     }
 
     #status-display.success-status {
-        color: $success;
+        color: #4ade80; 
+        border: round rgba(74, 222, 128, 0.3);
     }
 
     #status-display.error-status {
-        color: $error;
+        color: #f87171;
+        border: round rgba(248, 113, 113, 0.3);
     }
 
     TabbedContent {
-        margin-top: 1;
+        background: transparent;
+        margin-top: 0;
+    }
+
+    Tabs {
+        background: transparent;
+        border-bottom: solid rgba(255, 255, 255, 0.1);
     }
 
     TabPane {
-        padding: 1;
-        background: $surface;
+        padding: 0 1;
+        background: rgba(255, 255, 255, 0.03);
+        border: round rgba(255, 255, 255, 0.1);
+        margin-top: 0;
     }
 
     TextArea, #history-list {
-        border: solid $panel;
+        border: blank;
+        background: transparent;
         height: 1fr;
     }
 
-    /* Espaçamento vertical entre os blocos de histórico */
+    TextArea:focus {
+        border: blank;
+    }
+
     #history-list ListItem {
-        margin-bottom: 1;
+        margin-bottom: 0;
         padding: 0 1;
+        background: rgba(0, 0, 0, 0.2);
+        border: blank;
         height: auto;
+    }
+
+    #history-list ListItem:hover {
+        background: rgba(255, 255, 255, 0.1);
     }
     
     .error-text {
-        color: $error;
-        background: $error-darken-2;
-        border: solid $error;
+        color: #fca5a5;
+        background: rgba(248, 113, 113, 0.1);
+    }
+
+    Footer {
+        background: rgba(255, 255, 255, 0.05);
     }
     """
 
@@ -151,7 +197,7 @@ class APISandbox(App):
                 id="url-input",
                 placeholder="Insira a URL da API...",
             ),
-            Button("Enviar", id="run-btn", variant="success"),
+            Button("Enviar", id="run-btn", variant="primary"),
             id="request-bar",
         )
 
@@ -186,10 +232,7 @@ class APISandbox(App):
         yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
-        try:
-            pass
-        except Exception:
-            pass
+        pass
 
     def action_toggle_sidebar(self) -> None:
         sidebar = self.query_one("#sidebar")
@@ -202,9 +245,9 @@ class APISandbox(App):
             saved_data = self.request_history[index]
             self.query_one("#url-input", Input).value = saved_data["url"]
             self.query_one("#method-select", Select).value = saved_data["method"]
-            self.query_one("#tab-request-body", TabPane).query_one(
-                TextArea
-            ).text = saved_data["body"]
+            self.query_one("#tab-request-body", TabPane).query_one(TextArea).text = (
+                saved_data["body"]
+            )
 
             if self._active_notification:
                 try:
@@ -265,11 +308,11 @@ class APISandbox(App):
                     self.request_history.append(
                         {"method": method, "url": url, "body": raw_body}
                     )
-                    
+
                     display_url = url
                     if len(display_url) > 30:
                         display_url = display_url[:27] + "..."
-                    
+
                     entry_text = f"{method} [{response.status_code}]\n{display_url}"
                     await history_list.append(ListItem(Label(entry_text)))
 
