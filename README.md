@@ -19,6 +19,12 @@ APISandbox é uma ferramenta de teste de API via linha de comando (TUI) desenvol
 - Tab: Navegar entre os elementos da interface.
 - Enter: Enviar a requisição.
 
+## Imagens:
+
+![ex200](./assets/images/show200.png)
+
+![ex418](./assets/images/show418.png)
+
 ## Como Executar
 
 ### 1. Pré-requisitos
