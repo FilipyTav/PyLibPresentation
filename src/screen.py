@@ -302,7 +302,7 @@ class APISandbox(App):
                     payload_data = raw_body
 
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(follow_redirects=True) as client:
                     response = await client.request(method, url, json=payload_data)
 
                     self.request_history.append(
@@ -337,12 +337,13 @@ class APISandbox(App):
                     if "image/" in content_type:
                         size_kb = len(response.content) / 1024
                         display_text = (
+                            f"URL: {response.url}\n\n"
                             f"TIPO: Imagem Detectada\n"
                             f"CONTENT-TYPE: {content_type}\n"
                             f"TAMANHO: {size_kb:.2f} KB\n\n"
                             f"Nota: Interfaces de terminal não exibem arquivos binários diretamente."
                         )
-                        syntax_language = "json"
+                        syntax_language = "markdown"
 
                     elif "text/html" in content_type:
                         display_text = f"\n{response.text}"
