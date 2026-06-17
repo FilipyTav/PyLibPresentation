@@ -17,6 +17,10 @@ from textual.widgets import (
 
 class APISandbox(App):
     CSS = """
+    HeaderIcon {
+        display: none;
+    }
+
     #request-bar {
         height: auto;
         padding: 1 2;
@@ -69,7 +73,6 @@ class APISandbox(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
-        # Barra de requisição superior estilizada
         yield Horizontal(
             Input(
                 value="https://jsonplaceholder.typicode.com/posts/1",
