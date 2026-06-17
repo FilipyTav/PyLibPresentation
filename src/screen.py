@@ -12,6 +12,7 @@ from textual.widgets import (
     TextArea,
     LoadingIndicator,
     Select,
+    Label,
 )
 
 
@@ -50,6 +51,25 @@ class APISandbox(App):
 
     #main-container {
         padding: 1 2;
+    }
+
+    #status-display {
+        background: $panel;
+        padding: 0 2;
+        margin-top: 1;
+        height: 1;
+        text-style: bold;
+        content-align: center middle;
+        display: none;
+    }
+
+    /* Classes CSS para aplicar os tokens de cores com segurança */
+    #status-display.success-status {
+        color: $success;
+    }
+
+    #status-display.error-status {
+        color: $error;
     }
 
     TabbedContent {
@@ -102,8 +122,15 @@ class APISandbox(App):
         )
 
         with Vertical(id="main-container"):
+            yield Label("", id="status-display")
+
             with TabbedContent(id="response-tabs"):
-                # Mantemos os títulos fixos para uma UI consistente e livre de bugs de tipo
+                with TabPane("Corpo (Request Body)", id="tab-request-body"):
+                    yield TextArea(
+                        '{\n    "title": "foo",\n    "body": "bar",\n    "userId": 1\n}',
+                        language="json",
+                        read_only=False,
+                    )
                 with TabPane("Resposta", id="tab-response"):
                     yield TextArea(
                         "// Os resultados da API aparecerão aqui...",
@@ -133,23 +160,50 @@ class APISandbox(App):
             else:
                 method = str(select_value)
 
+            status_display = self.query_one("#status-display", Label)
             response_pane = self.query_one("#tab-response", TabPane)
             headers_pane = self.query_one("#tab-headers", TabPane)
             button = event.button
 
             button.disabled = True
+            status_display.display = False
+
+            status_display.remove_class("success-status", "error-status")
+
             response_pane.query("*").remove()
             headers_pane.query("*").remove()
 
             await response_pane.mount(LoadingIndicator())
             await headers_pane.mount(LoadingIndicator())
 
+            request_body_area = self.query_one("#tab-request-body", TabPane).query_one(
+                TextArea
+            )
+            raw_body = request_body_area.text
+
+            payload_data = None
+            if method in ("POST", "PUT") and raw_body.strip():
+                try:
+                    payload_data = json.loads(raw_body)
+                except json.JSONDecodeError:
+                    payload_data = raw_body
+
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.request(method, url)
+                    response = await client.request(method, url, json=payload_data)
 
                     response_pane.query(LoadingIndicator).remove()
                     headers_pane.query(LoadingIndicator).remove()
+
+                    status_display.display = True
+                    status_display.update(
+                        f"Status: {response.status_code} {response.reason_phrase}"
+                    )
+
+                    if response.is_success:
+                        status_display.add_class("success-status")
+                    else:
+                        status_display.add_class("error-status")
 
                     content_type = response.headers.get("content-type", "").lower()
 
@@ -160,11 +214,10 @@ class APISandbox(App):
                     if "image/" in content_type:
                         size_kb = len(response.content) / 1024
                         display_text = (
-                            f"// [TIPO]: Imagem Detectada n"
+                            f"// [TIPO]: Imagem Detectada\n"
                             f"// [CONTENT-TYPE]: {content_type}\n"
                             f"// [TAMANHO]: {size_kb:.2f} KB\n\n"
-                            f"Nota: Interfaces de terminal (TUI) não exibem arquivos binários diretamente.\n"
-                            f"Sua requisição obteve sucesso com Status Code: {response.status_code}."
+                            f"Nota: Interfaces de terminal (TUI) não exibem arquivos binários diretamente."
                         )
                         syntax_language = "json"
 
